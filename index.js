@@ -24,9 +24,13 @@ async function run() {
   try {
     await client.connect();
 
-    const foodCollection = client.db("theDiner").collection("Foods");
+    const foodCollection = client.db("theDiner").collection("foods");
 
-    
+    app.get("/foods", async (req, res) => {
+      const cursor = foodCollection.find();
+      const result = await cursor.toArray();
+      res.send(result);
+    });
 
     await client.db("admin").command({ ping: 1 });
     console.log(
