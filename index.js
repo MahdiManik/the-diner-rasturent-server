@@ -8,7 +8,7 @@ require("dotenv").config();
 app.use(express.json());
 app.use(cors());
 
-console.log(process.env.DB_NAME);
+
 
 const uri = `mongodb+srv://${process.env.DB_NAME}:${process.env.DB_PASS}@cluster0.rg5wc51.mongodb.net/?retryWrites=true&w=majority`;
 
@@ -29,6 +29,13 @@ async function run() {
     app.get("/foods", async (req, res) => {
       const cursor = foodCollection.find();
       const result = await cursor.toArray();
+      res.send(result);
+    });
+
+    app.get("/foods:id", async (req, res) => {
+      const id = req.params.id;
+      const query = { _id: new ObjectId(id) };
+      const result = await foodCollection.findOne(query);
       res.send(result);
     });
 
