@@ -1,3 +1,5 @@
+let orderCount = 0;
+
 const express = require("express");
 const cors = require("cors");
 const { MongoClient, ServerApiVersion, ObjectId } = require("mongodb");
@@ -7,8 +9,6 @@ require("dotenv").config();
 
 app.use(express.json());
 app.use(cors());
-
-
 
 const uri = `mongodb+srv://${process.env.DB_NAME}:${process.env.DB_PASS}@cluster0.rg5wc51.mongodb.net/?retryWrites=true&w=majority`;
 
@@ -25,6 +25,7 @@ async function run() {
     await client.connect();
 
     const foodCollection = client.db("theDiner").collection("foods");
+    const myOrderCollection = client.db("theDiner").collection("order");
 
     app.get("/foods", async (req, res) => {
       const cursor = foodCollection.find();
@@ -32,10 +33,25 @@ async function run() {
       res.send(result);
     });
 
-    app.get("/foods:id", async (req, res) => {
-      const id = req.params.id;
-      const query = { _id: new ObjectId(id) };
+    app.get("/foods/:foodId", async (req, res) => {
+      const id = req.params.foodId;
+
+      const query = { foodId: parseInt(id) };
+      console.log(query);
       const result = await foodCollection.findOne(query);
+      res.send(result);
+    });
+
+    app.post("/my-order", async (req, res) => {
+      const order = req.body;
+      //  const count = order.orderCount;
+      if (order.orderCount >= 0) {
+        orderCount++;
+        order.orderCount = orderCount;
+        console.log(order.orderCount);
+      }
+      const result = await myOrderCollection.insertOne(order);
+
       res.send(result);
     });
 
