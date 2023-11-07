@@ -29,17 +29,14 @@ const client = new MongoClient(uri, {
 });
 
 const verifyToken = async (req, res, next) => {
-  const token = req.cookies?.token;
-  //  console.log("token value in middleware", token);
+  const token = req?.cookies?.token;
   if (!token) {
-    return res.status(401).send({ message: "unauthorized" });
+    return res.status(401).send({ message: "not authorized" });
   }
   jwt.verify(token, process.env.ACCESS_TOKEN_SECRET, (err, decoded) => {
     if (err) {
-      //  console.log(err);
-      return res.status(401).send({ message: "not authorized" });
+      return res.status(401).send({ message: "Unauthorized" });
     }
-    //console.log("decoded token value", decoded);
     req.user = decoded;
     next();
   });
@@ -47,26 +44,38 @@ const verifyToken = async (req, res, next) => {
 
 async function run() {
   try {
-    //await client.connect();
+    await client.connect();
 
     const foodCollection = client.db("theDiner").collection("foods");
     const myOrderCollection = client.db("theDiner").collection("order");
 
-    app.get("/foods", async (req, res) => {
-      const cursor = foodCollection.find();
-      const result = await cursor.toArray();
-      res.send(result);
-    });
-
+    // showing specific food details
     app.get("/foods/:foodId", async (req, res) => {
       const id = req.params.foodId;
 
       const query = { foodId: parseInt(id) };
-      //  console.log(query);
       const result = await foodCollection.findOne(query);
       res.send(result);
     });
 
+    //update quantity and orderCount
+    app.patch("/foods/:id", async (req, res) => {
+      const id = req.params.id;
+      const filter = { _id: new ObjectId(id) };
+      const updatedCount = req.body.order_count;
+      const updatedQuantity = req.body.quantity;
+
+      const updatedDoc = {
+        $set: {
+          order_count: updatedCount,
+          quantity: updatedQuantity,
+        },
+      };
+      const result = await foodCollection.updateOne(filter, updatedDoc);
+      res.send(result);
+    });
+
+    //  order product stored on mongodb
     app.post("/my-order", async (req, res) => {
       const order = req.body;
       if (order.orderCount >= 0) {
@@ -75,19 +84,13 @@ async function run() {
       }
       if (order.quantity > 0) {
         order.quantity--;
-        console.log("quantity", order.quantity);
       }
       const result = await myOrderCollection.insertOne(order);
 
       res.send(result);
     });
 
-    app.get("/my-order", async (req, res) => {
-      const cursor = myOrderCollection.find();
-      const result = await cursor.toArray();
-      res.send(result);
-    });
-
+    //delete my order food
     app.delete("/my-order/:id", async (req, res) => {
       const id = req.params.id;
       const query = { _id: new ObjectId(id) };
@@ -95,49 +98,45 @@ async function run() {
       res.send(result);
     });
 
-    app.get("/my-order/:foodId", async (req, res) => {
-      const foodId = req.params.foodId;
-      const filter = { foodId: parseInt(foodId) };
-
-      try {
-        const data = await myOrderCollection.findOne(filter);
-
-        if (!data) {
-          res.status(404).send("No orders found for this food item.");
-          return;
-        }
-        const queryObj = {};
-        const sortObj = {};
-        const orderCount = req.query.orderCount;
-        const sortField = req.query.sortField;
-        const sortOrder = req.query.sortOrder;
-
-        if (orderCount) {
-          queryObj.orderCount = orderCount;
-        }
-
-        if (sortField && sortOrder) {
-          sortObj[sortField] = sortOrder === "asc" ? 1 : -1;
-        }
-
-        const cursor = myOrderCollection
-          .find({ foodId: parseInt(foodId), ...queryObj })
-          .sort(sortObj);
-        const result = await cursor.toArray();
-        res.json(result);
-      } catch (error) {
-        console.error(error);
-        res.status(500).send("Internal Server Error");
+    // pagination and sort for quantity and Count
+    app.get("/foods", async (req, res) => {
+      console.log("page", req.query.page);
+      console.log("size", req.query.size);
+      const page = parseInt(req.query.page);
+      const size = parseInt(req.query.size);
+      let queryObj = {};
+      let sortObj = {};
+      const category = req.query.category;
+      const sortField = req.query.sortField;
+      const sortOrder = req.query.sortOrder;
+      if (category) {
+        queryObj.category = category;
       }
+      if (sortField && sortOrder) {
+        sortObj[sortField] = sortOrder;
+      }
+      const result = await foodCollection
+        .find(queryObj)
+        .sort(sortObj)
+        .skip(page * size)
+        .limit(size)
+        .toArray();
+      res.send(result);
     });
 
+    //pagination count
+    app.get("/foodsCount", async (req, res) => {
+      const count = await foodCollection.estimatedDocumentCount();
+      res.send({ count });
+    });
+
+    //jwt token create
     app.post("/jwt", (req, res) => {
       const user = req.body;
-      //  console.log(user);
       const token = jwt.sign(user, process.env.ACCESS_TOKEN_SECRET, {
         expiresIn: "1h",
       });
-      console.log(token);
+      //  console.log(token);
       res
         .cookie("token", token, {
           httpOnly: true,
@@ -146,12 +145,11 @@ async function run() {
         .send({ success: true });
     });
 
-    app.get("/my-order", verifyToken, async (req, res) => {
-      //  console.log("req.query.email", req.query.email);
-      //  console.log("user in the valid token", req.user);
-      if (req.query?.email !== req.user?.email) {
-        return res.status(403).send({ message: "forbidden access" });
-      }
+    // in my order page verify token
+    app.get("/my-order", async (req, res) => {
+      //if (req.query?.email !== req.user?.email) {
+      //  return res.status(403).send({ message: "forbidden access" });
+      //}
       let query = {};
       if (req.query?.email) {
         query = { email: req.query.email };
@@ -159,10 +157,8 @@ async function run() {
       const result = await myOrderCollection.find(query).toArray();
       res.send(result);
     });
-
     app.post("/logout", (req, res) => {
       const user = req.body;
-      //  console.log("logout user", user);
       res.clearCookie("token", { maxAge: 0 }).send({ success: true });
     });
 
