@@ -9,7 +9,11 @@ require("dotenv").config();
 
 app.use(
   cors({
-    origin: ["http://localhost:5173"],
+    origin: [
+      "http://localhost:5173",
+      "https://the-diner-project.web.app",
+      "https://the-diner-project.firebaseapp.com",
+    ],
     credentials: true,
   })
 );
@@ -28,16 +32,13 @@ const client = new MongoClient(uri, {
 
 const verifyToken = async (req, res, next) => {
   const token = req.cookies?.token;
-  //  console.log("token value in middleware", token);
   if (!token) {
     return res.status(401).send({ message: "unauthorized" });
   }
   jwt.verify(token, process.env.ACCESS_TOKEN_SECRET, (err, decoded) => {
     if (err) {
-      //  console.log(err);
       return res.status(401).send({ message: "not authorized" });
     }
-    //console.log("decoded token value", decoded);
     req.user = decoded;
     next();
   });
@@ -52,6 +53,42 @@ async function run() {
     const addFoodCollection = client.db("theDiner").collection("addFood");
     const userCollection = client.db("theDiner").collection("users");
     const menuCollection = client.db("theDiner").collection("menus");
+
+    //jwt token create
+    app.post("/jwt", async (req, res) => {
+      const user = req.body;
+      const token = jwt.sign(user, process.env.ACCESS_TOKEN_SECRET, {
+        expiresIn: "1h",
+      });
+      res
+        .cookie("token", token, {
+          httpOnly: true,
+          secure: true,
+        })
+        .send({ success: true });
+    });
+
+    // in my order page verify token
+    app.get("/my-order", async (req, res) => {
+      //  console.log("req.query.email", req.query.email);
+      //  console.log("user in the valid token", req.user);
+    //  if (req.query?.email !== req.user?.email) {
+    //    return res.status(403).send({ message: "forbidden access" });
+    //  }
+      let query = {};
+      if (req.query?.email) {
+        query = { email: req.query.email };
+      }
+      console.log(query);
+      const result = await myOrderCollection.find(query).toArray();
+      res.send(result);
+    });
+
+    //logout for token
+    app.post("/logout", (req, res) => {
+      const user = req.body;
+      res.clearCookie("token", { maxAge: 0 }).send({ success: true });
+    });
 
     //get all menus
     app.get("/menus", async (req, res) => {
@@ -150,37 +187,6 @@ async function run() {
     app.get("/foodsCount", async (req, res) => {
       const count = await foodCollection.estimatedDocumentCount();
       res.send({ count });
-    });
-
-    //jwt token create
-    app.post("/jwt", async (req, res) => {
-      const user = req.body;
-      //  console.log(user);
-      const token = jwt.sign(user, process.env.ACCESS_TOKEN_SECRET, {
-        expiresIn: "1h",
-      });
-      res
-        .cookie("token", token, {
-          httpOnly: true,
-          secure: false,
-        })
-        .send({ success: true });
-    });
-
-    // in my order page verify token
-    app.get("/my-order", async (req, res) => {
-      let query = {};
-      if (req.query?.email) {
-        query = { email: req.query.email };
-      }
-      console.log(query);
-      const result = await myOrderCollection.find(query).toArray();
-      res.send(result);
-    });
-
-    app.post("/logout", (req, res) => {
-      const user = req.body;
-      res.clearCookie("token", { maxAge: 0 }).send({ success: true });
     });
 
     // add a food
