@@ -49,6 +49,25 @@ async function run() {
 
     const foodCollection = client.db("theDiner").collection("foods");
     const myOrderCollection = client.db("theDiner").collection("order");
+    const addFoodCollection = client.db("theDiner").collection("addFood");
+    const userCollection = client.db("theDiner").collection("users");
+
+    // user create
+    app.post("/users", async (req, res) => {
+      const user = req.body;
+      console.log("Check user", user);
+      const result = await userCollection.insertOne(user);
+      console.log(result);
+      res.send(result);
+    });
+
+    //user get for all need use a user
+    app.get("/user/:email", async (req, res) => {
+      const email = req.params.email;
+      const query = { email: email };
+      const result = await userCollection.findOne(query);
+      res.send(result);
+    });
 
     // showing specific food details
     app.get("/foods/:foodId", async (req, res) => {
@@ -119,8 +138,6 @@ async function run() {
       res.send({ count });
     });
 
-  
-
     //jwt token create
     app.post("/jwt", async (req, res) => {
       const user = req.body;
@@ -150,6 +167,23 @@ async function run() {
     app.post("/logout", (req, res) => {
       const user = req.body;
       res.clearCookie("token", { maxAge: 0 }).send({ success: true });
+    });
+
+    // add a food
+    app.post("/add-food", async (req, res) => {
+      const add = req.body;
+      const result = await addFoodCollection.insertOne(add);
+      res.send(result);
+    });
+
+    app.get("/add-food", async (req, res) => {
+      let query = {};
+      if (req.query?.email) {
+        query = { email: req.query.email };
+      }
+      console.log(query);
+      const result = await addFoodCollection.find(query).toArray();
+      res.send(result);
     });
 
     //await client.db("admin").command({ ping: 1 });
