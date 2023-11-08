@@ -51,6 +51,20 @@ async function run() {
     const myOrderCollection = client.db("theDiner").collection("order");
     const addFoodCollection = client.db("theDiner").collection("addFood");
     const userCollection = client.db("theDiner").collection("users");
+    const menuCollection = client.db("theDiner").collection("menus");
+
+    //get all menus
+    app.get("/menus", async (req, res) => {
+      try {
+        const query = req.query;
+        const result = await menuCollection.find(query).toArray();
+        console.log(result);
+        res.json(result);
+      } catch (error) {
+        console.error(error);
+        res.status(500).send("Internal Server Error");
+      }
+    });
 
     // user create
     app.post("/users", async (req, res) => {
